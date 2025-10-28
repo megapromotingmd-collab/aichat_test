@@ -1,20 +1,127 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-const API_BASE = "http://localhost:5000"; // backend URL
+const API_BASE = "/api"; // use vite proxy
+
+function AdminPanel({ onSelectChannel, refreshConversations }) {
+  const [agents, setAgents] = useState([]);
+  const [bindings, setBindings] = useState([]);
+  const [channels, setChannels] = useState([]);
+  const [newAgent, setNewAgent] = useState({ name: "Support Bot", model: "gpt-4o-mini", systemPrompt: "You are a helpful assistant.", temperature: 0.7 });
+  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [newChannel, setNewChannel] = useState({ platform: "facebook", pageId: "", accessToken: "", name: "" });
+
+  const fetchData = async () => {
+    const [a, b, c] = await Promise.all([
+      axios.get(`${API_BASE}/agents`),
+      axios.get(`${API_BASE}/bindings`),
+      axios.get(`${API_BASE}/channels`),
+    ]);
+    setAgents(a.data.agents || []);
+    setBindings(b.data.bindings || []);
+    setChannels(c.data.channels || []);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const createAgent = async () => {
+    await axios.post(`${API_BASE}/agents`, newAgent);
+    await fetchData();
+  };
+
+  const bindAgent = async () => {
+    if (!selectedAgentId || !selectedChannelId) return;
+    const platform = selectedChannelId.split(":")[0];
+    await axios.post(`${API_BASE}/bindings`, { channelId: selectedChannelId, platform, agentId: selectedAgentId });
+    await fetchData();
+    await refreshConversations();
+  };
+
+  const createChannel = async () => {
+    if (!newChannel.platform || !newChannel.pageId || !newChannel.accessToken) return;
+    await axios.post(`${API_BASE}/channels`, newChannel);
+    await fetchData();
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div>
+        <b>Create Channel</b>
+        <select style={styles.input} value={newChannel.platform} onChange={(e) => setNewChannel({ ...newChannel, platform: e.target.value })}>
+          <option value="facebook">facebook</option>
+          <option value="instagram">instagram</option>
+        </select>
+        <input style={styles.input} placeholder="Page ID" value={newChannel.pageId} onChange={(e) => setNewChannel({ ...newChannel, pageId: e.target.value })} />
+        <input style={styles.input} placeholder="Access Token" value={newChannel.accessToken} onChange={(e) => setNewChannel({ ...newChannel, accessToken: e.target.value })} />
+        <input style={styles.input} placeholder="Name (optional)" value={newChannel.name} onChange={(e) => setNewChannel({ ...newChannel, name: e.target.value })} />
+        <button style={styles.sendButton} onClick={createChannel}>Add Channel</button>
+      </div>
+
+      <div>
+        <b>Current Channel</b>
+        <select
+          style={styles.input}
+          value={selectedChannelId}
+          onChange={(e) => {
+            const cid = e.target.value;
+            setSelectedChannelId(cid);
+            onSelectChannel?.(cid);
+          }}
+        >
+          <option value="">(env token)</option>
+          {channels.map((c) => (
+            <option key={c.channelId} value={c.channelId}>
+              {c.name || c.channelId}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <b>Create Agent</b>
+        <input style={styles.input} placeholder="Name" value={newAgent.name} onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })} />
+        <input style={styles.input} placeholder="Model" value={newAgent.model} onChange={(e) => setNewAgent({ ...newAgent, model: e.target.value })} />
+        <textarea style={{ ...styles.input, height: 60 }} placeholder="System prompt" value={newAgent.systemPrompt} onChange={(e) => setNewAgent({ ...newAgent, systemPrompt: e.target.value })} />
+        <button style={styles.sendButton} onClick={createAgent}>Add</button>
+      </div>
+      <div>
+        <b>Bind Agent to Facebook Page</b>
+        <select style={styles.input} value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)}>
+          <option value="">Select agent</option>
+          {agents.map((a) => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </select>
+        <button style={styles.sendButton} onClick={bindAgent}>Bind</button>
+      </div>
+      <div>
+        <b>Bindings</b>
+        <ul>
+          {bindings.map((b) => (
+            <li key={b.channelId}>{b.channelId} → {b.agentId}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState("");
+  const [selectedChannelId, setSelectedChannelId] = useState("");
 
   // ------------------------------
   // 🔹 API functions
   // ------------------------------
   const getConversations = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/conversations`);
+      const res = await axios.get(`${API_BASE}/conversations`, { params: { channelId: selectedChannelId || undefined } });
       setConversations(res.data.conversations);
       console.log(" conversations:", res.data.conversations);
     } catch (error) {
@@ -24,7 +131,7 @@ function App() {
 
   const getMessages = async (conversationId) => {
     try {
-      const res = await axios.get(`${API_BASE}/messages/${conversationId}`);
+      const res = await axios.get(`${API_BASE}/messages/${conversationId}`, { params: { channelId: selectedChannelId || undefined } });
       setMessages(res.data.messages.reverse());
     } catch (error) {
       console.error("Error fetching messages:", error);
@@ -36,6 +143,7 @@ function App() {
       await axios.post(`${API_BASE}/send-message`, {
         recipientId,
         message: text,
+        channelId: selectedChannelId || undefined,
       });
 
       // Add the new message to the chat view
@@ -50,11 +158,11 @@ function App() {
   // ------------------------------
   useEffect(() => {
     getConversations();
-  }, []);
+  }, [selectedChannelId]);
 
   useEffect(() => {
     if (selectedConversation) getMessages(selectedConversation.conversationId);
-  }, [selectedConversation]);
+  }, [selectedConversation, selectedChannelId]);
 
   // ------------------------------
   // 🔹 Handlers
@@ -82,6 +190,10 @@ function App() {
       {/* Left: Conversations */}
       <div style={styles.sidebar}>
         <h2 style={styles.header}>Conversations</h2>
+        <div style={{ padding: 10 }}>
+          <h4>Admin</h4>
+          <AdminPanel onSelectChannel={setSelectedChannelId} refreshConversations={getConversations} />
+        </div>
         {conversations.map((conv) => (
           <div
             key={conv.conversationId}
@@ -105,7 +217,7 @@ function App() {
         {selectedConversation ? (
           <>
             <div style={styles.chatHeader}>
-              <h3>{selectedConversation.name}</h3>
+              <h3>{selectedConversation.data?.name || selectedConversation.name}</h3>
             </div>
 
             <div style={styles.messagesContainer}>
