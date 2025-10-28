@@ -1,0 +1,9 @@
+[
+  {
+    "id": "agent_7538d9ea-d466-4f1f-b23c-1a7d24f61658",
+    "name": "Support Bot",
+    "systemPrompt": "You are a helpful support agent.",
+    "model": "gpt-4o-mini",
+    "temperature": 0.7
+  }
+]

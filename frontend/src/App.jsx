@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import Agents from "./components/Agents.jsx";
+import Bindings from "./components/Bindings.jsx";
+import OAuthMeta from "./components/OAuthMeta.jsx";
 
-const API_BASE = "http://localhost:5000"; // backend URL
+const API_BASE = "http://localhost:5000/api"; // backend URL
 
 function App() {
   const [conversations, setConversations] = useState([]);
@@ -14,7 +17,7 @@ function App() {
   // ------------------------------
   const getConversations = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/conversations`);
+      const res = await axios.get(`${API_BASE}/meta/conversations`);
       setConversations(res.data.conversations);
       console.log(" conversations:", res.data.conversations);
     } catch (error) {
@@ -24,7 +27,7 @@ function App() {
 
   const getMessages = async (conversationId) => {
     try {
-      const res = await axios.get(`${API_BASE}/messages/${conversationId}`);
+      const res = await axios.get(`${API_BASE}/meta/messages/${conversationId}`);
       setMessages(res.data.messages.reverse());
     } catch (error) {
       console.error("Error fetching messages:", error);
@@ -33,7 +36,7 @@ function App() {
 
   const sendMessage = async (recipientId, text) => {
     try {
-      await axios.post(`${API_BASE}/send-message`, {
+      await axios.post(`${API_BASE}/meta/send-message`, {
         recipientId,
         message: text,
       });
@@ -79,7 +82,7 @@ function App() {
   // ------------------------------
   return (
     <div style={styles.container}>
-      {/* Left: Conversations */}
+      {/* Left: Conversations + Agents */}
       <div style={styles.sidebar}>
         <h2 style={styles.header}>Conversations</h2>
         {conversations.map((conv) => (
@@ -98,6 +101,12 @@ function App() {
             <p style={styles.snippet}>{conv.snippet}</p>
           </div>
         ))}
+        <div style={{ borderTop: '1px solid #ccc', marginTop: 12 }} />
+        <Agents />
+        <div style={{ borderTop: '1px solid #ccc', marginTop: 12 }} />
+        <Bindings />
+        <div style={{ borderTop: '1px solid #ccc', marginTop: 12 }} />
+        <OAuthMeta />
       </div>
 
       {/* Right: Chat */}
@@ -105,7 +114,7 @@ function App() {
         {selectedConversation ? (
           <>
             <div style={styles.chatHeader}>
-              <h3>{selectedConversation.name}</h3>
+              <h3>{selectedConversation.data?.name || selectedConversation.conversationId}</h3>
             </div>
 
             <div style={styles.messagesContainer}>
