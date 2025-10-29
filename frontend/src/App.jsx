@@ -1,13 +1,18 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import AssistantManager from "./components/AssistantManager.jsx";
 
 const API_BASE = "http://localhost:5000"; // backend URL
 
 function App() {
+  const [activeTab, setActiveTab] = useState("conversations");
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState("");
+  const [selectedAssistant, setSelectedAssistant] = useState(null);
+  const [autoSend, setAutoSend] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   // ------------------------------
   // 🔹 API functions
@@ -28,6 +33,33 @@ function App() {
       setMessages(res.data.messages.reverse());
     } catch (error) {
       console.error("Error fetching messages:", error);
+    }
+  };
+
+  const replyWithAssistant = async () => {
+    if (!selectedAssistant || !selectedConversation) return;
+    setGenerating(true);
+    try {
+      const res = await axios.post(
+        `${API_BASE}/api/assistants/${selectedAssistant.id}/reply`,
+        {
+          conversationId: selectedConversation.conversationId,
+          messages,
+          hint: messageText || undefined,
+        }
+      );
+      const aiText = res.data.reply;
+      setMessages((prev) => [
+        ...prev,
+        { from: selectedAssistant.name || "Assistant", text: aiText },
+      ]);
+      if (autoSend) {
+        await sendMessage(selectedConversation.data.id, aiText);
+      }
+    } catch (e) {
+      console.error("Error generating assistant reply:", e);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -79,25 +111,60 @@ function App() {
   // ------------------------------
   return (
     <div style={styles.container}>
-      {/* Left: Conversations */}
+      {/* Sidebar: Tabs + Conversations list */}
       <div style={styles.sidebar}>
-        <h2 style={styles.header}>Conversations</h2>
-        {conversations.map((conv) => (
-          <div
-            key={conv.conversationId}
-            onClick={() => handleConversationSelect(conv)}
+        <div style={styles.tabs}>
+          <button
             style={{
-              ...styles.conversationItem,
-              backgroundColor:
-                selectedConversation?.conversationId === conv.conversationId
-                  ? "#eee"
-                  : "#fff",
+              ...styles.tab,
+              backgroundColor: activeTab === "conversations" ? "#0078FF" : "#f0f0f0",
+              color: activeTab === "conversations" ? "#fff" : "#000",
             }}
+            onClick={() => setActiveTab("conversations")}
           >
-            <b>{conv.data.name}</b>
-            <p style={styles.snippet}>{conv.snippet}</p>
+            Conversations
+          </button>
+          <button
+            style={{
+              ...styles.tab,
+              backgroundColor: activeTab === "assistants" ? "#0078FF" : "#f0f0f0",
+              color: activeTab === "assistants" ? "#fff" : "#000",
+            }}
+            onClick={() => setActiveTab("assistants")}
+          >
+            Assistants
+          </button>
+        </div>
+
+        {activeTab === "conversations" ? (
+          <div>
+            <h2 style={styles.header}>Conversations</h2>
+            {conversations.map((conv) => (
+              <div
+                key={conv.conversationId}
+                onClick={() => handleConversationSelect(conv)}
+                style={{
+                  ...styles.conversationItem,
+                  backgroundColor:
+                    selectedConversation?.conversationId === conv.conversationId
+                      ? "#eee"
+                      : "#fff",
+                }}
+              >
+                <b>{conv.data.name}</b>
+                <p style={styles.snippet}>{conv.snippet}</p>
+              </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          <div style={{ padding: 10 }}>
+            <AssistantManager
+              apiBase={API_BASE}
+              selectedAssistantId={selectedAssistant?.id}
+              onSelectAssistant={(a) => setSelectedAssistant(a)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Right: Chat */}
@@ -105,7 +172,29 @@ function App() {
         {selectedConversation ? (
           <>
             <div style={styles.chatHeader}>
-              <h3>{selectedConversation.name}</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+                <h3>{selectedConversation.data?.name || "Conversation"}</h3>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ fontSize: 12, color: "#555" }}>
+                    Assistant: {selectedAssistant ? selectedAssistant.name : "None"}
+                  </div>
+                  <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={autoSend}
+                      onChange={(e) => setAutoSend(e.target.checked)}
+                    />
+                    Send to Messenger
+                  </label>
+                  <button
+                    onClick={replyWithAssistant}
+                    style={{ ...styles.sendButton, backgroundColor: "#4CAF50" }}
+                    disabled={!selectedAssistant || generating}
+                  >
+                    {generating ? "Generating..." : "Generate Reply"}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div style={styles.messagesContainer}>
@@ -135,7 +224,7 @@ function App() {
             <div style={styles.inputContainer}>
               <input
                 type="text"
-                placeholder="Type a message..."
+                placeholder="Optional hint for assistant... (or type a message to send yourself)"
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
                 onKeyDown={handleKeyDown}
