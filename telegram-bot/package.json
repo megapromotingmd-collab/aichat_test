@@ -1,0 +1,25 @@
+{
+  "name": "oowell-telegram-bot",
+  "version": "1.0.0",
+  "description": "OO.WELL Telegram Bot - Asistent virtual pentru sănătatea hormonală feminină",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node --watch bot.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "health",
+    "ai"
+  ],
+  "author": "OO.WELL",
+  "license": "ISC",
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0",
+    "dotenv": "^16.4.5",
+    "axios": "^1.7.2",
+    "better-sqlite3": "^11.0.0"
+  }
+}
